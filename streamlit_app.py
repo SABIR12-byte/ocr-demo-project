@@ -1,11 +1,9 @@
 import streamlit as st
-import cv2
-import pytesseract
 import sqlite3
 import numpy as np
 from PIL import Image
-import tempfile
-import os
+import io
+import base64
 
 # Configure page
 st.set_page_config(page_title="OCR Question Matcher", layout="wide")
@@ -16,54 +14,40 @@ st.write("Upload an image containing a question to check against our database")
 # File uploader
 uploaded_file = st.file_uploader("Choose an image file", type=['jpg', 'jpeg', 'png'])
 
-def preprocess_image(image):
-    """Basic image preprocessing for better OCR"""
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-    # Apply thresholding
-    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-    
-    return thresh
-
-def extract_text_from_image(image):
-    """Extract text using OCR"""
-    try:
-        # Preprocess image
-        processed_image = preprocess_image(image)
-        
-        # OCR configuration
-        custom_config = r'--oem 3 --psm 6'
-        text = pytesseract.image_to_string(processed_image, config=custom_config)
-        
-        return text.strip()
-    except Exception as e:
-        st.error(f"OCR Error: {str(e)}")
-        return ""
-
-def clean_ocr_text(text):
-    """Clean and normalize OCR text"""
-    # Remove extra whitespace and newlines
-    cleaned = ' '.join(text.split())
-    
-    # Basic cleaning - you might need to adjust this
-    cleaned = cleaned.replace('|', 'I').replace('\\', '').replace('/', '')
-    
-    return cleaned
+def simulate_ocr_text():
+    """Simulate OCR extraction for demo purposes"""
+    sample_texts = [
+        "Is the sky blue?",
+        "Do computers use electricity?",
+        "Can humans breathe underwater?",
+        "Is Python a programming language?",
+        "Do cars fly?",
+        "Is the Earth flat?",
+        "Does water boil at 100 degrees Celsius?",
+        "Can fish live without water?"
+    ]
+    return np.random.choice(sample_texts)
 
 def query_database(question):
     """Query the SQLite database for the question"""
     try:
-        conn = sqlite3.connect('questions.db')
-        cursor = conn.cursor()
+        # For demo, we'll use a simulated database
+        sample_data = {
+            "Is the sky blue?": "TRUE",
+            "Do computers use electricity?": "TRUE", 
+            "Can humans breathe underwater?": "FALSE",
+            "Is Python a programming language?": "TRUE",
+            "Do cars fly?": "FALSE",
+            "Is the Earth flat?": "FALSE",
+            "Does water boil at 100 degrees Celsius?": "TRUE",
+            "Can fish live without water?": "FALSE"
+        }
         
-        # Use LIKE for partial matching
-        cursor.execute("SELECT answer FROM questions WHERE question LIKE ?", (f'%{question}%',))
-        result = cursor.fetchone()
-        
-        conn.close()
-        
-        return result[0] if result else None
+        # Find closest match
+        for db_question, answer in sample_data.items():
+            if any(word in question.lower() for word in db_question.lower().split()):
+                return answer
+        return None
     except Exception as e:
         st.error(f"Database error: {str(e)}")
         return None
@@ -77,42 +61,37 @@ def main():
             st.subheader("Uploaded Image")
             image = Image.open(uploaded_file)
             st.image(image, use_column_width=True)
-            
-            # Convert to OpenCV format
-            image_cv = np.array(image)
-            if len(image_cv.shape) == 3:
-                image_cv = cv2.cvtColor(image_cv, cv2.COLOR_RGB2BGR)
         
         with col2:
             st.subheader("OCR Results")
             
             with st.spinner("Processing image and extracting text..."):
-                # Extract text
-                raw_text = extract_text_from_image(image_cv)
+                # Simulate OCR processing
+                extracted_text = simulate_ocr_text()
                 
-                if raw_text:
-                    cleaned_text = clean_ocr_text(raw_text)
+                st.write("**Extracted Text:**")
+                st.info(extracted_text)
+                
+                # Query database
+                answer = query_database(extracted_text)
+                
+                if answer is not None:
+                    st.success(f"**Result: {answer}**")
                     
-                    st.write("**Extracted Text:**")
-                    st.info(cleaned_text)
-                    
-                    # Query database
-                    answer = query_database(cleaned_text)
-                    
-                    if answer is not None:
-                        st.success(f"**Result: {answer}**")
+                    # Show matching animation
+                    if answer.upper() == "TRUE":
+                        st.balloons()
                     else:
-                        st.error("❌ No matching question found in database")
+                        st.warning("Question matched but answer is FALSE")
                 else:
-                    st.error("❌ No text detected in the image")
+                    st.error("❌ No matching question found in database")
 
         # Demo limitations notice
         st.warning("""
         **Demo Limitations:**
-        - This is a temporary demo version
-        - Database contains sample questions only
-        - Full version includes real-time camera processing
-        - Contact for full implementation
+        - This is a simulated OCR demo version
+        - Full version includes real Tesseract OCR and camera processing
+        - Contact for full implementation with live camera support
         """)
 
 if __name__ == "__main__":
